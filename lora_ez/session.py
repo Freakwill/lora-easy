@@ -103,10 +103,9 @@ class _ChatSession:
         )
         if len(self.model.tokenizer(test)["input_ids"]) <= self.max_tokens:
             return
-        summary_prompt = (
-            "Summarise the conversation above concisely. "
-            "Keep key facts, decisions, and the user's intent. "
-            "Drop small talk.")
+        summary_prompt ="""Summarise the conversation above concisely. 
+Keep key facts, decisions, and the user's intent. 
+Drop small talk."""
         msgs = self.history + [{"role": "user", "content": summary_prompt}]
         fmt = self.model.tokenizer.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True)
