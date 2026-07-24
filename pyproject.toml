@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lora-easy"
-version = "1.2"
+version = "1.3"
 description = "A tiny OOP wrapper around PEFT for LoRA fine-tuning of causal LMs."
 readme = "README.md"
 requires-python = ">=3.9"
