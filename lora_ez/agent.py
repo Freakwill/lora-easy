@@ -1,4 +1,29 @@
-"""Agent — a LoraModel subclass with description, web search, and file search."""
+"""Agent — a LoraModel subclass with description, web search, and file search.
+
+Use::
+
+    from lora_ez import Agent
+
+    a = Agent("Qwen/Qwen2.5-0.5B-Instruct",
+              description="you are data analyst",
+              web_enabled=True,
+              web_allowlist=["*docs.python*"],
+              file_enabled=True,
+              file_dirs=["."])
+
+    # ----- chat (auto-injects tool context) -----
+    print(a.chat("what version of Python is installed?"))
+
+    # ----- fetch a URL -----
+    print(a.web_fetch("https://docs.python.org/3/"))
+
+    # ----- search local files -----
+    print(a.file_read("README.md"))
+
+    # ----- turn tools off -----
+    a.disable_web()
+    # pure-chat agent
+"""
 
 import fnmatch
 import re

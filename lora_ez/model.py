@@ -1,4 +1,26 @@
-"""Core model wrapper — LoraModel for LoRA fine-tuning and inference."""
+"""Core model wrapper — LoraModel for LoRA fine-tuning and inference.
+
+Use::
+
+    from lora_ez import LoraModel
+
+    m = LoraModel("Qwen/Qwen2.5-0.5B-Instruct")
+
+    # ----- fine-tune -----
+    # data is a list of ShareGPT convos: [{"messages": [{"role":"user",...}, ...]}, ...]
+    m.enable_lora(r=8, alpha=16)
+    m.train(data, epochs=30)
+    m.save()                       # -> ./lora-assistant/
+
+    # ----- chat (single-turn) -----
+    print(m.chat("你好"))
+
+    # ----- multi-turn with memory -----
+    with m.chat_session("./chat.json", auto_save=True) as s:
+        s.chat("I'm back")
+        s.chat("How are you?")
+        s.run()                    # interactive REPL, /exit to quit
+"""
 
 from pathlib import Path
 
