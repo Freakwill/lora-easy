@@ -104,10 +104,13 @@ class LoraModel:
         messages.append({"role": "user", "content": prompt})
         fmt = self._format(messages)
         inp = self.tokenizer(fmt, return_tensors="pt").to(self.model.device)
+        # inp["input_ids"]:  (1, seq_len)   — batch of 1, padded token IDs
+        # inp["attention_mask"]: (1, seq_len) — 1=real token, 0=padding
         with torch.no_grad():
             out = self.model.generate(**inp, max_new_tokens=max_tokens,
                                       temperature=0.7, do_sample=True,
                                       pad_token_id=self.tokenizer.pad_token_id)
+        # out: (1, seq_len + new_tokens)  — input prefix + generated reply
         return self.tokenizer.decode(out[0], skip_special_tokens=True).rpartition("assistant\n")[-1].strip()
 
     # -- Chat session (context manager) ------------------------------------

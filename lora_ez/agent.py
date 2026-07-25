@@ -47,8 +47,8 @@ class Agent(LoraModel):
     def __init__(
         self,
         model_id: str,
-        description: str,
         name: str = "agent",
+        description: str,
         device: str = "mps",
         *,
         # web-search knobs (off by default)
