@@ -90,8 +90,11 @@ class _ChatSession:
                 break
             if not prompt.strip():
                 continue
-            if prompt.strip() == "/exit":
-                break
+            if prompt.strip().startswith("/"):
+                from .commands import dispatch
+                if dispatch(self, prompt.strip()):
+                    break
+                continue
             reply = self.chat(prompt)
             print(f"{name}: {reply}")
 
@@ -110,11 +113,13 @@ Drop small talk."""
         fmt = self.model.tokenizer.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True)
         inp = self.model.tokenizer(fmt, return_tensors="pt").to(self.model.model.device)
+        # inp["input_ids"]: (1, hist_len)  — full history as one batch
         with torch.no_grad():
             out = self.model.model.generate(
                 **inp, max_new_tokens=min(self.max_tokens // 2, 300),
                 temperature=0.3, do_sample=False,
                 pad_token_id=self.model.tokenizer.pad_token_id)
+        # out: (1, hist_len + summary_tokens)  — input + short summary
         raw = self.model.tokenizer.decode(out[0], skip_special_tokens=True)
         summary = raw.rpartition("assistant\n")[-1].strip()
         self.history.clear()
