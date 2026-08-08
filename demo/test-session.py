@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Test: multi-turn chat session with slash commands."""
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from lora_ez import LoraModel, command
+
+
+# register a custom slash command for testing
+@command("/time")
+def _time(session, *args):
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+m = LoraModel("Qwen/Qwen2.5-0.5B-Instruct", name="cat")
+
+with m.chat_session("./session-test.json", auto_save=False) as s:
+    print("--- programmatic chat (3 turns) ---")
+    print("1:", s.chat("打个招呼吧"))
+    print("2:", s.chat("还记得你刚才说了什么吗"))
+    print("3:", s.chat("你今天开心吗"))
+    print()
+
+    print("--- slash command test ---")
+    from lora_ez.commands import dispatch
+    dispatch(s, "/help")
+    dispatch(s, "/time")
+    dispatch(s, "/system_prompt you are a talking cat")
+    print()
+
+    print("--- chat after /system ---")
+    print(s.chat("你是谁"))
+    print()
+
+    print("history:", len(s.history), "turns")

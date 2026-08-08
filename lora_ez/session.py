@@ -80,23 +80,22 @@ class _ChatSession:
 
     def run(self):
         """Interactive REPL — type messages at a prompt, ``/exit`` to quit."""
-        name = self.model.name
         print(f"Chat session started.  Type /exit to quit.\n"
               f"{'='*50}")
         while True:
             try:
-                prompt = input("User: ")
+                prompt = input("User: ").strip()
             except (EOFError, KeyboardInterrupt):
                 break
-            if not prompt.strip():
+            if not prompt:
                 continue
-            if prompt.strip().startswith("/"):
+            if prompt.startswith("/"):
                 from .commands import dispatch
-                if dispatch(self, prompt.strip()):
+                if dispatch(self, prompt):
                     break
                 continue
             reply = self.chat(prompt)
-            print(f"{name}: {reply}")
+            print(f"{self.model:t}: {reply}")
 
     def _maybe_summarize(self, next_prompt: str):
         """Compress history if it would overflow ``max_tokens``, using the model itself."""
@@ -106,9 +105,14 @@ class _ChatSession:
         )
         if len(self.model.tokenizer(test)["input_ids"]) <= self.max_tokens:
             return
-        summary_prompt ="""Summarise the conversation above concisely. 
-Keep key facts, decisions, and the user's intent. 
-Drop small talk."""
+        self._force_summarize()
+
+    def _force_summarize(self):
+        """Always summarise history (used by ``/summarize`` command)."""
+        summary_prompt = (
+            "Summarise the conversation above concisely. "
+            "Keep key facts, decisions, and the user's intent. "
+            "Drop small talk.")
         msgs = self.history + [{"role": "user", "content": summary_prompt}]
         fmt = self.model.tokenizer.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True)
@@ -122,11 +126,11 @@ Drop small talk."""
         # out: (1, hist_len + summary_tokens)  — input + short summary
         raw = self.model.tokenizer.decode(out[0], skip_special_tokens=True)
         summary = raw.rpartition("assistant\n")[-1].strip()
-        self.history.clear()
+
         # preserve system prompt if set, merge summary into it
         if self.system_prompt:
-            self.history.append({"role": "system",
-                                 "content": f"{self.system_prompt}\n\n[Summary of previous turns: {summary}]"})
+            self.history = [{"role": "system",
+                                 "content": f"{self.system_prompt}\n\n[Summary of previous turns: {summary}]"}]
         else:
-            self.history.append({"role": "system",
-                                 "content": f"Previous conversation summary: {summary}"})
+            self.history = [{"role": "system",
+                                 "content": f"Previous conversation summary: {summary}"}]

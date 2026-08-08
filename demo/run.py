@@ -1,42 +1,46 @@
 #!/usr/bin/env python3
-"""Run lora-easy training from a YAML config."""
+"""Demo: train a model to talk like a cat, compare before/after."""
+
+# make the library importable when running from the demo/ folder
+# import sys
+# sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import json
-import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import yaml
 from lora_ez import LoraModel
 
-CONFIG_PATH = Path(__file__).parent / "cat.yml"
-cfg = yaml.safe_load(CONFIG_PATH.read_text())
 
-assert "model_id" in cfg, "Please provide `model_id`"
-assert "data_path" in cfg, "Please provide `data_path`"
+data_path = Path(__file__).parent / "cat-chat.json"
 
-name = cfg.get("name") or CONFIG_PATH.stem
+test_prompts = [
+    "你觉得今天的晚饭吃什么好？",
+    "你为什么总是半夜跑酷？",
+    "过来让我抱一下。"
+]
 
-data = json.loads(Path(cfg["data_path"]).read_text())
+model_id = "Qwen/Qwen2.5-0.5B-Instruct"
 
-m = LoraModel(cfg["model_id"], name=name)
 
-# gather test prompts: inline + file
-prompts = cfg.get("test_prompts") or []
-if p := cfg.get("test_path"):
-    prompts += [l.strip() for l in Path(p).read_text().splitlines() if l.strip()]
+# -- train ----------------------------
 
-print("=== BEFORE ===")
-for p in prompts:
+data = json.loads(data_path.read_text())
+
+m = LoraModel(model_id=model_id, name='cat')
+
+print("\n=== BEFORE fine-tuning ===")
+for p in TEST_PROMPTS:
     print(f"  input:  {p}")
     print(f"  output: {m.chat(p)}\n")
 
 m.enable_lora()
-m.train(data, output=cfg.get("output", False))
-m.save(cfg.get("save_path"))
+m.train(data, epochs=30)
+if save:
+    m.save()
 
-print("=== AFTER ===")
-for p in prompts:
+print("\n=== AFTER fine-tuning ===")
+for p in TEST_PROMPTS:
     print(f"  input:  {p}")
     print(f"  output: {m.chat(p)}\n")
+
 

@@ -30,9 +30,31 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingA
 
 
 class LoraModel:
-    """A causal LM with built-in LoRA training & chat, hiding ``from_pretrained``."""
+    """A causal LM with built-in LoRA fine-tuning and chat.
 
-    def __init__(self, model_id: str, name: str = "assistant", device: str = "mps",
+    Parameters
+    ----------
+    model_id : str
+        HuggingFace model identifier (e.g. ``"Qwen/Qwen2.5-0.5B-Instruct"``).
+    name : str
+        Human-readable label, used for default save paths and REPL display.
+    device : str
+        ``"mps"`` (Apple Silicon), ``"cuda"``, or ``"cpu"``.
+    system_prompt : str or None
+        Prepend a system instruction to every chat turn.  When ``None`` the
+        model uses its built-in default (``"You are Qwen …"``).
+
+    Key attributes
+    --------------
+    base
+        The frozen pretrained model (never modified directly).
+    peft_model
+        The LoRA-wrapped model, or ``None`` before ``enable_lora()``.
+    model
+        The active model — ``base`` or ``peft_model`` depending on LoRA state.
+    """
+
+    def __init__(self, model_id: str, name: str = "Assistant", device: str = "mps",
                  system_prompt: str | None = None):
         self.model_id = model_id
         self.name = name
@@ -46,7 +68,20 @@ class LoraModel:
 
     def __repr__(self) -> str:
         n = sum(p.numel() for p in self.model.parameters())
-        return f"LoraModel('{self.model_id}', {n/1e9:.1f}B params, lora={'yes' if self._has_lora() else 'no'})"
+        return f"{self.name.title()}: LoraModel('{self.model_id}', {n/1e9:.1f}B params, lora={'yes' if self._has_lora() else 'no'})"
+
+    def __str__(self):
+        return self.name.title()
+
+    def __format__(self, spec=None):
+        if spec is None:
+            return self.name
+        elif spec is 'l':
+            return self.name.lower()
+        elif spec is 't':
+            return self.name
+        else:
+            raise ValueError('`spec` should be one of None | l | t')
 
     def _has_lora(self) -> bool:
         return self.peft_model is not None
@@ -157,7 +192,7 @@ class LoraModel:
                "labels": [-100 if m == 0 else i for i, m in zip(inds, ms)]}
               for inds, ms in zip(tok["input_ids"], tok["attention_mask"])]
 
-        output_dir = f"./lora-output-{self.name}" if output else "./temp_output"
+        output_dir = f"./lora-output-{self.name.lower()}" if output else "./temp_output"
         defaults = {"epochs": 30, "lr": 3e-4, "per_device_train_batch_size": 4, "logging_steps": 5}
         merged = defaults | kwargs
         args = TrainingArguments(
@@ -179,13 +214,28 @@ class LoraModel:
 
     # -- Persistence --------------------------------------------------------
 
+    @classmethod
+    def from_yaml(cls, path: str):
+        """Create a LoraModel from a YAML config file.
+
+        Expected keys: ``model_id``, ``name``, ``system_prompt``,
+        ``peft_path`` (optional — auto-loads the adapter).
+        """
+        import yaml
+        cfg = yaml.safe_load(Path(path).read_text())
+        m = cls(cfg["model_id"], name=cfg.get("name", "Assistant"),
+                 system_prompt=cfg.get("system_prompt"))
+        if peft := cfg.get("peft_path"):
+            m.load(peft)
+        return m
+
     def save(self, path: str | None = None):
-        path = f"lora-{self.name}" if path is None else path
+        path = f"lora-{self:l}" if path is None else path
         self.model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
         print(f"The adapter is saved in `{path}`.")
 
     def load(self, path: str | None = None):
-        path = f"lora-{self.name}" if path is None else path
+        path = f"lora-{self:l}" if path is None else path
         self.peft_model = PeftModel.from_pretrained(self.base, path)
-        self.enable_lora()
+        # self.enable_lora()

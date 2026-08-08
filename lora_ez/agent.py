@@ -1,56 +1,44 @@
-"""Agent — a LoraModel subclass with description, web search, and file search.
+"""Agent — wraps a LoraModel with web search and file search capabilities.
 
 Use::
 
-    from lora_ez import Agent
+    from lora_ez import LoraModel, Agent
 
-    a = Agent("Qwen/Qwen2.5-0.5B-Instruct",
-              description="you are data analyst",
-              web_enabled=True,
-              web_allowlist=["*docs.python*"],
-              file_enabled=True,
-              file_dirs=["."])
+    m = LoraModel("Qwen/Qwen2.5-0.5B-Instruct")
+    a = Agent(m, description="you are data analyst",
+              web_enabled=True, file_enabled=True)
 
-    # ----- chat (auto-injects tool context) -----
-    print(a.chat("what version of Python is installed?"))
-
-    # ----- fetch a URL -----
-    print(a.web_fetch("https://docs.python.org/3/"))
-
-    # ----- search local files -----
-    print(a.file_read("README.md"))
-
-    # ----- turn tools off -----
-    a.disable_web()
-    # pure-chat agent
+    a.chat("what version of Python?")    # auto-injects tool context
+    a.web_fetch("https://example.com")   # fetch a URL
+    a.file_read("README.md")             # read local file
+    a.disable_web()                       # turn tools off
 """
 
 import fnmatch
 import re
 from pathlib import Path
 
-from .model import LoraModel
 
-
-class Agent(LoraModel):
-    """A conversational agent with web search and local file search capabilities.
+class Agent:
+    """A conversational agent with web search and local file search.
 
     Parameters
     ----------
-    description : str
-        The agent's personality / role.  Set automatically as
-        ``system_prompt``, so the model sees it at every turn.
+    model : LoraModel
+        A pre-loaded model.  ``chat()`` delegates to it.
+    name : str or None
+        Display name.  Defaults to ``model.name``.
+    description : str or None
+        The agent's persona — forwarded as ``system_prompt`` on every turn.
+        Defaults to ``model.system_prompt``.
     """
-
-    _URL_RE = re.compile(r"^https?://")
 
     def __init__(
         self,
-        model_id: str,
-        name: str = "agent",
-        description: str,
-        device: str = "mps",
+        model,
         *,
+        name: str | None = None,
+        description: str | None = None,
         # web-search knobs (off by default)
         web_enabled: bool = False,
         web_allowlist: list[str] | None = None,
@@ -61,9 +49,9 @@ class Agent(LoraModel):
         file_include: list[str] | None = None,
         file_exclude: list[str] | None = None,
     ):
-        super().__init__(model_id, name=name, device=device,
-                         system_prompt=description)
-        self.description = description
+        self.model = model
+        self.name = name or model.name
+        self.description = description or model.system_prompt
 
         self.web_enabled = web_enabled
         self.web_allowlist = web_allowlist or []
@@ -71,8 +59,37 @@ class Agent(LoraModel):
         self.file_enabled = file_enabled
         self.file_dirs = file_dirs or ["."]
         self.file_include = file_include or ["*"]
-        self.file_exclude = file_exclude or [".git", "__pycache__", "*.pyc",
-                                              ".DS_Store", ".*"]
+        self.file_exclude = file_exclude or [
+            ".git", "__pycache__", "*.pyc", ".DS_Store", ".*",
+        ]
+
+    def __repr__(self) -> str:
+        return f"Agent(name='{self.name}', web={self.web_enabled}, files={self.file_enabled})"
+
+    @classmethod
+    def from_yaml(cls, path: str):
+        """Create an Agent from a YAML config file.
+
+        Delegates to ``LoraModel.from_yaml()`` for the model;
+        additional keys control web/file search.
+        """
+        import yaml
+        from .model import LoraModel
+
+        cfg = yaml.safe_load(Path(path).read_text())
+        model = LoraModel.from_yaml(path)
+        return cls(
+            model,
+            name=cfg.get("name", model.name),
+            description=cfg.get("description", model.system_prompt),
+            web_enabled=cfg.get("web_enabled", False),
+            web_allowlist=cfg.get("web_allowlist"),
+            web_blocklist=cfg.get("web_blocklist"),
+            file_enabled=cfg.get("file_enabled", False),
+            file_dirs=cfg.get("file_dirs"),
+            file_include=cfg.get("file_include"),
+            file_exclude=cfg.get("file_exclude"),
+        )
 
     # -- tool toggles --------------------------------------------------------
 
@@ -98,8 +115,10 @@ class Agent(LoraModel):
                 f"{prompt}\n\n"
                 f"[Relevant context from tools:\n{context}\n]"
             )
-        return super().chat(prompt, history=history, max_tokens=max_tokens,
-                           system_prompt=system_prompt, **kwargs)
+        return self.model.chat(
+            prompt, history=history, max_tokens=max_tokens,
+            system_prompt=system_prompt or self.description, **kwargs,
+        )
 
     # -- context gathering ---------------------------------------------------
 
@@ -114,17 +133,12 @@ class Agent(LoraModel):
     # -- web helpers ---------------------------------------------------------
 
     def _web_search(self, query: str) -> str:
-        """Search the web using firecrawl (if available) or requests.
-
-        Only URLs matching ``web_allowlist`` (if set) are fetched;
-        URLs matching ``web_blocklist`` are always skipped.
-        """
         try:
             from firecrawl import FirecrawlApp
             app = FirecrawlApp()
-            data = app.search(query)  # returns object with .data attribute
+            data = app.search(query)
             if callable(getattr(data, "data", None)):
-                items = list(data.data())[:5]  # pydantic model
+                items = list(data.data())[:5]
             elif isinstance(data, dict):
                 items = data.get("data", [])[:5]
             else:
@@ -147,10 +161,6 @@ class Agent(LoraModel):
         return ""
 
     def web_fetch(self, url: str, timeout: int = 15) -> str:
-        """Fetch a single URL and return its text content.
-
-        Respects ``web_allowlist`` and ``web_blocklist``.
-        """
         if not self._url_allowed(url):
             return f"[blocked: {url}]"
         try:
@@ -158,7 +168,6 @@ class Agent(LoraModel):
             resp = requests.get(url, timeout=timeout,
                                 headers={"User-Agent": "lora-easy-agent/1.0"})
             resp.raise_for_status()
-            # crude text extraction: strip tags
             body = re.sub(r"<[^>]+>", " ", resp.text)
             body = re.sub(r"\s+", " ", body).strip()
             return body[:4000]
@@ -181,11 +190,6 @@ class Agent(LoraModel):
     # -- file helpers --------------------------------------------------------
 
     def _file_search(self, query: str) -> str:
-        """Search local files matching include/exclude patterns.
-
-        Only looks inside ``file_dirs``, honouring ``file_include``
-        and ``file_exclude`` glob patterns.
-        """
         terms = query.lower().split()
         results: list[str] = []
         for d in self.file_dirs:
@@ -204,28 +208,23 @@ class Agent(LoraModel):
                         results.append(str(rel))
         if not results:
             return ""
-        return "Files found:\n" + "\n".join(
-            f"  - {r}" for r in results[:20]
-        )
+        return "Files found:\n" + "\n".join(f"  - {r}" for r in results[:20])
 
     def file_read(self, path: str, limit: int = 100) -> str:
-        """Read ``limit`` lines from a file inside ``file_dirs``."""
         p = Path(path)
         if not any((Path(d).resolve() / p).is_file() for d in self.file_dirs):
             return f"[access denied: {path}]"
         try:
-            lines = p.read_text(errors="replace").splitlines()
-            return "\n".join(lines[:limit])
+            return "\n".join(p.read_text(errors="replace").splitlines()[:limit])
         except Exception as e:
             return f"[read error: {e}]"
 
-    # -- chat_session override -----------------------------------------------
+    # -- chat session --------------------------------------------------------
 
     def chat_session(self, *args, **kwargs):
-        """Same as ``LoraModel.chat_session``, but auto-forwards
-        the agent's ``system_prompt`` (the description).
-        """
         from .session import _ChatSession
-        return _ChatSession(self, *args,
-                           system_prompt=kwargs.pop("system_prompt", self.description),
-                           **kwargs)
+        return _ChatSession(
+            self.model, *args,
+            system_prompt=kwargs.pop("system_prompt", self.description),
+            **kwargs,
+        )

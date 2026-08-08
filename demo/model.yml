@@ -1,7 +1,9 @@
 model_id: Qwen/Qwen2.5-0.5B-Instruct
-data_path: ./cat-chat.json
-save_path: ./cat-lora
-output: true
+name: cat
+# data_path: ./cat-chat.json
+# save_path: ./cat-lora
+output: false
+system_prompt: "你是中华田园猫"
 test_prompts:
   - 你觉得今天的晚饭吃什么好？
   - 你为什么总是半夜跑酷？
