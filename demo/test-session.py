@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Test: multi-turn chat session with slash commands."""
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from lora_ez import LoraModel, command
 
 
@@ -15,7 +11,7 @@ def _time(session, *args):
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-m = LoraModel("Qwen/Qwen2.5-0.5B-Instruct", name="cat")
+m = LoraModel(id_="Qwen/Qwen2.5-0.5B-Instruct", name="cat")
 
 with m.chat_session("./session-test.json", auto_save=False) as s:
     print("--- programmatic chat (3 turns) ---")

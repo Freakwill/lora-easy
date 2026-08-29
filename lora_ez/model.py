@@ -22,8 +22,6 @@ Use::
         s.run()                    # interactive REPL, /exit to quit
 """
 
-from pathlib import Path
-
 import torch
 from peft import LoraConfig, get_peft_model, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
@@ -34,7 +32,7 @@ class LoraModel:
 
     Parameters
     ----------
-    model_id : str
+    id_ : str
         HuggingFace model identifier (e.g. ``"Qwen/Qwen2.5-0.5B-Instruct"``).
     name : str
         Human-readable label, used for default save paths and REPL display.
@@ -43,6 +41,11 @@ class LoraModel:
     system_prompt : str or None
         Prepend a system instruction to every chat turn.  When ``None`` the
         model uses its built-in default (``"You are Qwen …"``).
+    save_path : str
+        The path where the adapter is saved.
+    cache_dir : str or None
+        Custom model download cache.  ``None`` uses the default
+        ``~/.cache/huggingface/hub/``.
 
     Key attributes
     --------------
@@ -54,21 +57,25 @@ class LoraModel:
         The active model — ``base`` or ``peft_model`` depending on LoRA state.
     """
 
-    def __init__(self, model_id: str, name: str = "Assistant", device: str = "mps",
-                 system_prompt: str | None = None):
-        self.model_id = model_id
+    def __init__(self, id_: str, name: str = "Assistant", device: str = "mps",
+                 system_prompt: str | None = None, save_path: str | None = None,
+                 cache_dir: str | None = None):
+        self.id_ = id_
         self.name = name
         self.system_prompt = system_prompt
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        # tokenizer download (cached at cache_dir or ~/.cache/huggingface/hub/)
+        self.tokenizer = AutoTokenizer.from_pretrained(id_, cache_dir=cache_dir)
         self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.base = AutoModelForCausalLM.from_pretrained(model_id, device_map=device, torch_dtype="auto")
+        # model weights download (largest; first run downloads GBs)
+        self.base = AutoModelForCausalLM.from_pretrained(id_, device_map=device, torch_dtype="auto", cache_dir=cache_dir)
         self.peft_model = None
         self.model = self.base
         self._lora_enabled = False
+        self.save_path = save_path or f"{self:l}-lora"
 
     def __repr__(self) -> str:
         n = sum(p.numel() for p in self.model.parameters())
-        return f"{self.name.title()}: LoraModel('{self.model_id}', {n/1e9:.1f}B params, lora={'yes' if self._has_lora() else 'no'})"
+        return f"{self.name.title()}: LoraModel('{self.id_}', {n/1e9:.1f}B params, lora={'yes' if self._has_lora() else 'no'})"
 
     def __str__(self):
         return self.name.title()
@@ -76,9 +83,9 @@ class LoraModel:
     def __format__(self, spec=None):
         if spec is None:
             return self.name
-        elif spec is 'l':
+        elif spec == 'l':
             return self.name.lower()
-        elif spec is 't':
+        elif spec == 't':
             return self.name
         else:
             raise ValueError('`spec` should be one of None | l | t')
@@ -171,7 +178,7 @@ class LoraModel:
 
     # -- Training -----------------------------------------------------------
 
-    def train(self, conversations: list[dict], output: bool = False, **kwargs):
+    def train(self, conversations: list[dict], save_checkpoints: bool = False, **kwargs):
         """Fine-tune with LoRA on ShareGPT-format conversations.
 
         Pipeline: render each convo via chat template -> tokenize with pad+trunc ->
@@ -179,8 +186,8 @@ class LoraModel:
         Auto-enables LoRA if not already active.
 
         Args:
-            output: if set, save training logs/checkpoints to ``./lora-output-{name}``.
-                    False (default) produces no output files.
+            save_checkpoints: if set, save a checkpoint per epoch to
+                    ``./lora-output-{name}``.  False (default) produces no files.
         """
         if not self.lora_enabled:
             self.enable_lora()
@@ -192,17 +199,17 @@ class LoraModel:
                "labels": [-100 if m == 0 else i for i, m in zip(inds, ms)]}
               for inds, ms in zip(tok["input_ids"], tok["attention_mask"])]
 
-        output_dir = f"./lora-output-{self.name.lower()}" if output else "./temp_output"
-        defaults = {"epochs": 30, "lr": 3e-4, "per_device_train_batch_size": 4, "logging_steps": 5}
-        merged = defaults | kwargs
+        output_dir = f"./lora-output-{self.name.lower()}" if save_checkpoints else "./temp_output"
+        default_args = {"epochs": 30, "lr": 3e-4, "per_device_train_batch_size": 4, "logging_steps": 5}
+        kwargs = default_args | kwargs
         args = TrainingArguments(
-            output_dir=output_dir, **merged,
-            save_strategy="no" if output is None else "epoch",
+            output_dir=output_dir, **kwargs,
+            save_strategy="no" if not save_checkpoints else "epoch",
             report_to="none",
         )
         Trainer(model=self.model, args=args, train_dataset=dataset, processing_class=self.tokenizer).train()
 
-        if not output:
+        if not save_checkpoints:
             import shutil
             shutil.rmtree("./temp_output", ignore_errors=True)
 
@@ -218,24 +225,31 @@ class LoraModel:
     def from_yaml(cls, path: str):
         """Create a LoraModel from a YAML config file.
 
-        Expected keys: ``model_id``, ``name``, ``system_prompt``,
+        Expected keys: ``id_``, ``name``, ``system_prompt``,
         ``peft_path`` (optional — auto-loads the adapter).
         """
         import yaml
+        from pathlib import Path
         cfg = yaml.safe_load(Path(path).read_text())
-        m = cls(cfg["model_id"], name=cfg.get("name", "Assistant"),
+        if "id_" in cfg:
+            id_ = cfg["id_"]
+        elif "id" in cfg:
+            id_ = cfg["id"]
+        else:
+            raise KeyError("Not provide the key `id_` | `id`.")
+        m = cls(id_=id_, name=cfg.get("name", "Assistant"),
                  system_prompt=cfg.get("system_prompt"))
         if peft := cfg.get("peft_path"):
             m.load(peft)
         return m
 
     def save(self, path: str | None = None):
-        path = f"lora-{self:l}" if path is None else path
+        path = path or self.save_path
         self.model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
         print(f"The adapter is saved in `{path}`.")
 
     def load(self, path: str | None = None):
-        path = f"lora-{self:l}" if path is None else path
+        path = path or self.save_path
         self.peft_model = PeftModel.from_pretrained(self.base, path)
         # self.enable_lora()
