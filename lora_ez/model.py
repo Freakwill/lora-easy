@@ -23,6 +23,7 @@ Use::
 """
 
 import torch
+from pathlib import Path
 from peft import LoraConfig, get_peft_model, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 
@@ -41,6 +42,11 @@ class LoraModel:
     system_prompt : str or None
         Prepend a system instruction to every chat turn.  When ``None`` the
         model uses its built-in default (``"You are Qwen …"``).
+    description : str or None
+        Immutable identity/role (e.g. ``"you are a sassy house cat"``).
+        Rendered as its own system message BEFORE ``system_prompt``.
+        Saved with the adapter (``description.txt``) and restored on ``load()``.
+        ``None`` (default) means no description is stored or loaded.
     save_path : str
         The path where the adapter is saved.
     cache_dir : str or None
@@ -59,10 +65,11 @@ class LoraModel:
 
     def __init__(self, id_: str, name: str = "Assistant", device: str = "mps",
                  system_prompt: str | None = None, save_path: str | None = None,
-                 cache_dir: str | None = None):
+                 cache_dir: str | None = None, description: str | None = None):
         self.id_ = id_
         self.name = name
         self.system_prompt = system_prompt
+        self._description = description
         # tokenizer download (cached at cache_dir or ~/.cache/huggingface/hub/)
         self.tokenizer = AutoTokenizer.from_pretrained(id_, cache_dir=cache_dir)
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -72,6 +79,11 @@ class LoraModel:
         self.model = self.base
         self._lora_enabled = False
         self.save_path = save_path or f"{self:l}-lora"
+
+    @property
+    def description(self) -> str | None:
+        """Immutable role/identity string (read-only; set via ``__init__`` or ``load()``)."""
+        return self._description
 
     def __repr__(self) -> str:
         n = sum(p.numel() for p in self.model.parameters())
@@ -137,12 +149,19 @@ class LoraModel:
         ``history`` is a list of ``{"role": ..., "content": ...}`` dicts from
         previous turns.  The model sees the full context and can refer back to it.
         ``system_prompt`` overrides ``self.system_prompt`` for this single turn.
+        ``description`` (if set) is always prepended as its own system message.
         """
         self.model.eval()
         sp = system_prompt if system_prompt is not None else self.system_prompt
         messages = list(history or [])
-        if sp and (not messages or messages[0].get("role") != "system"):
-            messages = [{"role": "system", "content": sp}] + messages
+        if not messages or messages[0].get("role") != "system":
+            # description first (immutable identity), then system_prompt (mutable)
+            sys_msgs = []
+            if self.description:
+                sys_msgs.append({"role": "system", "content": self.description})
+            if sp:
+                sys_msgs.append({"role": "system", "content": sp})
+            messages = sys_msgs + messages
         messages.append({"role": "user", "content": prompt})
         fmt = self._format(messages)
         inp = self.tokenizer(fmt, return_tensors="pt").to(self.model.device)
@@ -238,18 +257,25 @@ class LoraModel:
         else:
             raise KeyError("Not provide the key `id_` | `id`.")
         m = cls(id_=id_, name=cfg.get("name", "Assistant"),
-                 system_prompt=cfg.get("system_prompt"))
+                 system_prompt=cfg.get("system_prompt"),
+                 description=cfg.get("description"))
         if peft := cfg.get("peft_path"):
             m.load(peft)
         return m
 
     def save(self, path: str | None = None):
+        # save the adapter
         path = path or self.save_path
         self.model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
-        print(f"The adapter is saved in `{path}`.")
+        if self.description is not None:
+            (Path(path) / "description.txt").write_text(self.description)
 
     def load(self, path: str | None = None):
+        # load the adapter
         path = path or self.save_path
         self.peft_model = PeftModel.from_pretrained(self.base, path)
-        # self.enable_lora()
+        # restore description if it was saved alongside the adapter
+        desc_file = Path(path) / "description.txt"
+        if desc_file.exists():
+            self._description = desc_file.read_text()

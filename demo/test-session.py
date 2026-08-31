@@ -15,9 +15,12 @@ m = LoraModel(id_="Qwen/Qwen2.5-0.5B-Instruct", name="cat")
 
 with m.chat_session("./session-test.json", auto_save=False) as s:
     print("--- programmatic chat (3 turns) ---")
-    print("1:", s.chat("打个招呼吧"))
-    print("2:", s.chat("还记得你刚才说了什么吗"))
-    print("3:", s.chat("你今天开心吗"))
+    print("User: 打个招呼吧")
+    print("Cat:", s> "打个招呼吧")
+    print("User: 你今天开心吗")
+    print("Cat:", s> "你今天开心吗")
+    print("User: 还记得你刚才说了什么吗")
+    print("Cat:", s> "还记得你刚才说了什么吗")
     print()
 
     print("--- slash command test ---")
@@ -28,7 +31,7 @@ with m.chat_session("./session-test.json", auto_save=False) as s:
     print()
 
     print("--- chat after /system ---")
-    print(s.chat("你是谁"))
+    print(s> "你是谁")
     print()
 
     print("history:", len(s.history), "turns")

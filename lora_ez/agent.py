@@ -29,8 +29,9 @@ class Agent:
     name : str or None
         Display name.  Defaults to ``model.name``.
     description : str or None
-        The agent's persona — forwarded as ``system_prompt`` on every turn.
-        Defaults to ``model.system_prompt``.
+        The agent's persona.  Defaults to ``model.description`` (the immutable
+        identity).  Only forwarded as ``system_prompt`` when it differs from
+        the model's own description.
     """
 
     def __init__(
@@ -51,7 +52,7 @@ class Agent:
     ):
         self.model = model
         self.name = name or model.name
-        self.description = description or model.system_prompt
+        self.description = description or model.description
 
         self.web_enabled = web_enabled
         self.web_allowlist = web_allowlist or []
@@ -81,7 +82,7 @@ class Agent:
         return cls(
             model,
             name=cfg.get("name", model.name),
-            description=cfg.get("description", model.system_prompt),
+            description=cfg.get("description", model.description),
             web_enabled=cfg.get("web_enabled", False),
             web_allowlist=cfg.get("web_allowlist"),
             web_blocklist=cfg.get("web_blocklist"),
@@ -115,9 +116,14 @@ class Agent:
                 f"{prompt}\n\n"
                 f"[Relevant context from tools:\n{context}\n]"
             )
+        # model.description is prepended by the model itself; only forward a
+        # system_prompt that differs from it (avoids duplicating the identity)
+        sp = system_prompt
+        if sp is None and self.description and self.description != self.model.description:
+            sp = self.description
         return self.model.chat(
             prompt, history=history, max_tokens=max_tokens,
-            system_prompt=system_prompt or self.description, **kwargs,
+            system_prompt=sp, **kwargs,
         )
 
     # -- context gathering ---------------------------------------------------
@@ -223,8 +229,11 @@ class Agent:
 
     def chat_session(self, *args, **kwargs):
         from .session import _ChatSession
+        sp = kwargs.pop("system_prompt", None)
+        if sp is None and self.description != self.model.description:
+            sp = self.description
         return _ChatSession(
             self.model, *args,
-            system_prompt=kwargs.pop("system_prompt", self.description),
+            system_prompt=sp,
             **kwargs,
         )

@@ -45,6 +45,7 @@ test_prompts = [
 
 # model
 m = LoraModel(id_=id_, name=name)
+# m.load()
 
 print("\n=== BEFORE fine-tuning ===")
 for p in test_prompts:

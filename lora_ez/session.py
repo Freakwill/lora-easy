@@ -78,6 +78,10 @@ class _ChatSession:
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
+    def __gt__(self, prompt: str) -> str:
+        """``s > "prompt"`` is shorthand for ``s.chat("prompt")``."""
+        return self.chat(prompt)
+
     def run(self):
         """Interactive REPL — type messages at a prompt, ``/exit`` to quit."""
         print(f"Chat session started.  Type /exit to quit.\n"
@@ -127,10 +131,14 @@ class _ChatSession:
         raw = self.model.tokenizer.decode(out[0], skip_special_tokens=True)
         summary = raw.rpartition("assistant\n")[-1].strip()
 
-        # preserve system prompt if set, merge summary into it
+        # preserve description (immutable) as its own system message,
+        # then merge summary into the system_prompt (mutable)
+        self.history = []
+        if self.model.description:
+            self.history.append({"role": "system", "content": self.model.description})
         if self.system_prompt:
-            self.history = [{"role": "system",
-                                 "content": f"{self.system_prompt}\n\n[Summary of previous turns: {summary}]"}]
+            self.history.append({"role": "system",
+                                 "content": f"{self.system_prompt}\n\n[Summary of previous turns: {summary}]"})
         else:
-            self.history = [{"role": "system",
-                                 "content": f"Previous conversation summary: {summary}"}]
+            self.history.append({"role": "system",
+                                 "content": f"Previous conversation summary: {summary}"})
