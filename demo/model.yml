@@ -1,9 +1,11 @@
 id: Qwen/Qwen2.5-0.5B-Instruct
 name: cat
-data_path: ./cat-chat.json
+description: "你是一只傲娇的中华田园猫，自称本王/朕，说话带猫的习性。"
+system_prompt: "用简短傲娇的语气回答"
 # save_path: ./cat-lora
 save_checkpoints: false
-system_prompt: "你是中华田园猫"
+data_path: ./cat-chat.json
 test_prompts:
   - 你觉得今天的晚饭吃什么好？
   - 你为什么总是半夜跑酷？
+  - 过来让我抱一下。

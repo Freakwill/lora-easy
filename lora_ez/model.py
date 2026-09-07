@@ -87,20 +87,22 @@ class LoraModel:
 
     def __repr__(self) -> str:
         n = sum(p.numel() for p in self.model.parameters())
-        return f"{self.name.title()}: LoraModel('{self.id_}', {n/1e9:.1f}B params, lora={'yes' if self._has_lora() else 'no'})"
+        return f"{self:t}: LoraModel('{self:i}', {n/1e9:.1f}B params, lora={'yes' if self._has_lora() else 'no'})"
 
     def __str__(self):
         return self.name.title()
 
-    def __format__(self, spec=None):
-        if spec is None:
+    def __format__(self, spec=''):
+        if spec == '':
             return self.name
         elif spec == 'l':
             return self.name.lower()
         elif spec == 't':
             return self.name
+        elif spec == 'i':
+            return self.id_
         else:
-            raise ValueError('`spec` should be one of None | l | t')
+            raise ValueError('`spec` should be one of [empty] | l | t')
 
     def _has_lora(self) -> bool:
         return self.peft_model is not None
@@ -183,13 +185,12 @@ class LoraModel:
         Usage::
 
             with model.chat_session("./history.json", auto_save=True) as s:
-                s.chat("Hello")
-                s.chat("What do you think?")
+                s> "Hello"
+                s> "What do you think?"
                 s.history   # all turns so far
 
         When the history grows beyond ``max_tokens`` tokens it is automatically
         summarised by the model and replaced with a compact system message.
-        ``system_prompt`` overrides ``self.system_prompt`` for the session.
         """
         from .session import _ChatSession
         return _ChatSession(self, save_path, auto_save, max_tokens,
@@ -197,7 +198,8 @@ class LoraModel:
 
     # -- Training -----------------------------------------------------------
 
-    def train(self, conversations: list[dict], save_checkpoints: bool = False, **kwargs):
+    def train(self, conversations: list[dict], save_checkpoints: bool = False,
+              max_length: int = 256, **kwargs):
         """Fine-tune with LoRA on ShareGPT-format conversations.
 
         Pipeline: render each convo via chat template -> tokenize with pad+trunc ->
@@ -207,22 +209,31 @@ class LoraModel:
         Args:
             save_checkpoints: if set, save a checkpoint per epoch to
                     ``./lora-output-{name}``.  False (default) produces no files.
+            max_length: tokenizer truncation/padding length.  Raise it when
+                    conversations are long (multi-turn or long replies) —
+                    truncation cuts from the END, which would clip the target
+                    assistant reply.  Default 256.
         """
         if not self.lora_enabled:
             self.enable_lora()
         self.model.config.use_cache = False
 
         texts = [self._format(self._render(c), add_gen=False) for c in conversations]
-        tok = self.tokenizer(texts, truncation=True, padding="max_length", max_length=256)
+        tok = self.tokenizer(texts, truncation=True, padding="max_length",
+                             max_length=max_length)
         dataset = [{"input_ids": inds, "attention_mask": ms,
                "labels": [-100 if m == 0 else i for i, m in zip(inds, ms)]}
               for inds, ms in zip(tok["input_ids"], tok["attention_mask"])]
 
-        output_dir = f"./lora-output-{self.name.lower()}" if save_checkpoints else "./temp_output"
-        default_args = {"epochs": 30, "lr": 3e-4, "per_device_train_batch_size": 4, "logging_steps": 5}
-        kwargs = default_args | kwargs
+        # friendly defaults; translate to TrainingArguments names below
+        defaults = {"output_dir": f"./lora-output-{self:l}" if save_checkpoints else "./temp_output",
+                    "epochs": 30, "lr": 3e-4,
+                    "per_device_train_batch_size": 4, "logging_steps": 5}
+        kwargs = defaults | kwargs
         args = TrainingArguments(
-            output_dir=output_dir, **kwargs,
+            num_train_epochs=kwargs.pop("epochs"),
+            learning_rate=kwargs.pop("lr"),
+            **kwargs,
             save_strategy="no" if not save_checkpoints else "epoch",
             report_to="none",
         )
@@ -272,10 +283,15 @@ class LoraModel:
             (Path(path) / "description.txt").write_text(self.description)
 
     def load(self, path: str | None = None):
-        # load the adapter
-        path = path or self.save_path
-        self.peft_model = PeftModel.from_pretrained(self.base, path)
+        # load the adapter from a LOCAL directory
+        p = Path(path or self.save_path)
+        if not p.is_dir():
+            raise FileNotFoundError(
+                f"""Adapter directory not found: '{p}'. 
+If it lives elsewhere pass the path explicitly, e.g. m.load('/path/to/ivanka-lora').""")
+        self.peft_model = PeftModel.from_pretrained(self.base, str(p),
+                                                    is_trainable=True)
         # restore description if it was saved alongside the adapter
-        desc_file = Path(path) / "description.txt"
+        desc_file = p / "description.txt"
         if desc_file.exists():
             self._description = desc_file.read_text()

@@ -31,10 +31,11 @@ from lora_ez import LoraModel
 data_path = Path(__file__).parent / "cat-chat.json"  # ShareGPT-format training data
 id_ = "Qwen/Qwen2.5-0.5B-Instruct"                   # base model id
 name = "cat"                                         # display name / save-path prefix
+description = "你是一只傲娇的中华田园猫，自称本王/朕，说话带猫的习性。"  # immutable identity
 
-# -- train ----------------------------
 
-# data & test prompts
+# -- data & test prompts --------------
+
 data = json.loads(data_path.read_text())
 
 test_prompts = [
@@ -43,18 +44,26 @@ test_prompts = [
     "过来让我抱一下。"
 ]
 
-# model
-m = LoraModel(id_=id_, name=name)
-# m.load()
+# -- train ----------------------------
 
-print("\n=== BEFORE fine-tuning ===")
+# create model
+print(f"[1/4] Loading base model {id_} ...")
+m = LoraModel(id_=id_, name=name, description=description)
+print(f"      model ready: {m}")
+# m.load() # if (the adapter of) fine-tuning model exists
+
+print(f"[2/4] Testing {len(test_prompts)} prompts BEFORE fine-tuning ...\n")
+print("=== BEFORE fine-tuning ===")
 for p in test_prompts:
     print(f"  User:  {p}")
     print(f"  {name}: {m.chat(p)}\n")
 
+print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, 30 epochs ...")
 m.train(data, epochs=30)
+print("      training done")
 
-print("\n=== AFTER fine-tuning ===")
+print(f"[4/4] Testing the same prompts AFTER fine-tuning ...\n")
+print("=== AFTER fine-tuning ===")
 for p in test_prompts:
     print(f"  User:  {p}")
     print(f"  {name}: {m.chat(p)}\n")

@@ -73,7 +73,7 @@ class _ChatSession:
         """
         self._maybe_summarize(prompt)
         self.history.append({"role": "user", "content": prompt})
-        reply = self.model.chat(prompt, history=self.history[:-1],
+        reply = self.model.chat(prompt, history=self.history[:-1], 
                                 system_prompt=self.system_prompt, **kwargs)
         self.history.append({"role": "assistant", "content": reply})
         return reply
