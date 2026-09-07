@@ -14,6 +14,9 @@ A tiny, object-oriented wrapper around 🤗 **PEFT** for LoRA fine-tuning of cau
 language models. One `LoraModel` class hides the `from_pretrained` boilerplate,
 and `Agent` adds web / file search capabilities on top.
 
+> This project is primarily developed by [Hermes Agent](https://hermes-agent.nousresearch.com),
+> an AI coding agent by Nous Research, through iterative human-machine pairing.
+
 ## Key concepts
 
 - **LoRA (Low-Rank Adaptation)** — instead of updating all of a model's weights,
@@ -69,8 +72,8 @@ print(m.chat("hello!"))
 
 # ----- multi-turn with memory -----
 with m.chat_session("./chat.json", auto_save=True) as s:
-    s.chat("I'm back")
-    s.chat("how are you?")
+    s > "I'm back"            # shorthand for s.chat("I'm back")
+    s > "how are you?"
     s.run()                # interactive REPL, /exit to quit
 ```
 
@@ -128,13 +131,19 @@ Built-in: `/exit`, `/help`, `/system-prompt`.
 
 ## Demo
 
-The [`demo/`](demo/) folder trains `Qwen2.5-0.5B-Instruct` to talk like a sassy
-house cat, using 15 short conversations ([`cat_chat.json`](demo/cat_chat.json)).
+Two demo folders show end-to-end LoRA persona training:
+
+- [`demo/`](demo/) trains `Qwen2.5-0.5B-Instruct` to talk like a sassy
+  house cat using [`cat-chat.json`](demo/cat-chat.json) (YAML-driven via
+  [`model.yml`](demo/model.yml)).
+- [`demo2/`](demo2/) trains `Qwen2.5-1.5B-Instruct` as a high-EQ girlfriend
+  persona "Ivanka" ([`ivanka-chat.json`](demo2/ivanka-chat.json)), showing
+  multi-turn dialogues and long-reply handling via `max_length`.
 
 ```bash
-cd demo
-python3 lora-cat.py          # full training + before/after comparison
-python3 test-session.py      # multi-turn chat session with commands
+cd demo && python3 run.py            # cat persona
+cd demo2 && python3 run.py           # Ivanka persona (train ~1-2 min on MPS)
+cd demo2 && python3 test-session.py  # interactive chat with Ivanka
 ```
 
 ## Links
