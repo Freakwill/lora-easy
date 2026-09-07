@@ -6,3 +6,5 @@ dist/
 build/
 *.egg-info/
 demo2/ivanka-lora/
+temp.*
+*.tmp
