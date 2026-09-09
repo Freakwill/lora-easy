@@ -17,8 +17,8 @@ Use::
 
     # ----- multi-turn with memory -----
     with m.chat_session("./chat.json", auto_save=True) as s:
-        s.chat("I'm back")
-        s.chat("How are you?")
+        s> "I'm back"
+        s> "How are you?"
         s.run()                    # interactive REPL, /exit to quit
 """
 
@@ -227,7 +227,7 @@ class LoraModel:
 
         # friendly defaults; translate to TrainingArguments names below
         defaults = {"output_dir": f"./lora-output-{self:l}" if save_checkpoints else "./temp_output",
-                    "epochs": 30, "lr": 3e-4,
+                    "epochs": 5, "lr": 1e-5,
                     "per_device_train_batch_size": 4, "logging_steps": 5}
         kwargs = defaults | kwargs
         args = TrainingArguments(

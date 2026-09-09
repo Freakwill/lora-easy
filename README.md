@@ -143,7 +143,8 @@ Two demo folders show end-to-end LoRA persona training:
 ```bash
 cd demo && python3 run.py            # cat persona
 cd demo2 && python3 run.py           # Ivanka persona (train ~1-2 min on MPS)
-cd demo2 && python3 test-session.py  # interactive chat with Ivanka
+cd demo2 && python3 run_session.py   # interactive REPL chat with Ivanka
+cd demo2 && python3 test_session.py  # quick multi-turn + command test
 ```
 
 ## Links
