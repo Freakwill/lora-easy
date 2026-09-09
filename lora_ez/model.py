@@ -202,28 +202,22 @@ class LoraModel:
               max_length: int = 256, **kwargs):
         """Fine-tune with LoRA on ShareGPT-format conversations.
 
-        Pipeline: render each convo via chat template -> tokenize with pad+trunc ->
-        mask padding positions in labels -> Trainer.
+        SFT pipeline: for each convo, everything up to the final assistant
+        message is CONTEXT (labels masked to -100); the model learns to
+        predict ONLY the last assistant reply.  Context is left-truncated
+        when too long so the target is never clipped.
         Auto-enables LoRA if not already active.
 
         Args:
             save_checkpoints: if set, save a checkpoint per epoch to
                     ``./lora-output-{name}``.  False (default) produces no files.
-            max_length: tokenizer truncation/padding length.  Raise it when
-                    conversations are long (multi-turn or long replies) —
-                    truncation cuts from the END, which would clip the target
-                    assistant reply.  Default 256.
+            max_length: tokenizer truncation/padding length.  Default 256.
         """
         if not self.lora_enabled:
             self.enable_lora()
         self.model.config.use_cache = False
 
-        texts = [self._format(self._render(c), add_gen=False) for c in conversations]
-        tok = self.tokenizer(texts, truncation=True, padding="max_length",
-                             max_length=max_length)
-        dataset = [{"input_ids": inds, "attention_mask": ms,
-               "labels": [-100 if m == 0 else i for i, m in zip(inds, ms)]}
-              for inds, ms in zip(tok["input_ids"], tok["attention_mask"])]
+        dataset = self._sft_dataset(conversations, max_length)
 
         # friendly defaults; translate to TrainingArguments names below
         defaults = {"output_dir": f"./lora-output-{self:l}" if save_checkpoints else "./temp_output",
@@ -245,9 +239,40 @@ class LoraModel:
 
         self.model.config.use_cache = True
 
-    def _render(self, conv: dict) -> str:
-        return self.tokenizer.apply_chat_template(
-            conv["messages"], tokenize=False, add_generation_prompt=False)
+    def _sft_dataset(self, conversations: list[dict], max_length: int) -> list[dict]:
+        """Build SFT examples: predict ONLY the final assistant reply.
+
+        Returns a list of ``{"input_ids", "attention_mask", "labels"}``
+        where ``labels`` is -100 everywhere except the assistant tokens.
+        """
+        pad = self.tokenizer.pad_token_id
+        template = self.tokenizer.apply_chat_template
+        examples = []
+        for conv in conversations:
+            msgs = conv["messages"]
+            if not msgs or msgs[-1].get("role") != "assistant":
+                raise ValueError(
+                    "each conversation must end with an assistant message")
+            prior, last = msgs[:-1], msgs[-1]
+            # context, ending with the '<|im_start|>assistant\n' generation prompt
+            ctx = template(prior, tokenize=False, add_generation_prompt=True)
+            ctx_ids = self.tokenizer(ctx)["input_ids"]
+            out_ids = self.tokenizer(last["content"], add_special_tokens=False)["input_ids"]
+
+            # left-truncate context so the target reply always fits
+            over = len(ctx_ids) + len(out_ids) - max_length
+            if over > 0:
+                ctx_ids = ctx_ids[max(over, 0):]
+            ids = (ctx_ids + out_ids)[:max_length]
+            labels = ([-100] * len(ctx_ids) + out_ids)[:max_length]
+
+            # right-pad to a uniform length
+            n_pad = max_length - len(ids)
+            ids = ids + [pad] * n_pad
+            labels = labels + [-100] * n_pad
+            mask = [1 if t != pad else 0 for t in ids]
+            examples.append({"input_ids": ids, "attention_mask": mask, "labels": labels})
+        return examples
 
     # -- Persistence --------------------------------------------------------
 
