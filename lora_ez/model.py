@@ -172,6 +172,7 @@ class LoraModel:
         with torch.no_grad():
             out = self.model.generate(**inp, max_new_tokens=max_tokens,
                                       temperature=0.7, do_sample=True,
+                                      repetition_penalty=1.1,
                                       pad_token_id=self.tokenizer.pad_token_id)
         # out: (1, seq_len + new_tokens)  — input prefix + generated reply
         return self.tokenizer.decode(out[0], skip_special_tokens=True).rpartition("assistant\n")[-1].strip()

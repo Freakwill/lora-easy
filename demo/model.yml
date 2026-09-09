@@ -1,11 +1,19 @@
-id: Qwen/Qwen2.5-0.5B-Instruct
+id: Qwen/Qwen2.5-1.5B-Instruct
 name: cat
 description: "你是一只傲娇的中华田园猫，自称本王/朕，说话带猫的习性。"
 system_prompt: "用简短傲娇的语气回答"
 # save_path: ./cat-lora
 save_checkpoints: false
+epochs: 10
+max_length: 256
+lr: 0.0001
 data_path: ./cat-chat.json
 test_prompts:
+  # legacy prompts (near training data, show memorization-ish recall)
   - 你觉得今天的晚饭吃什么好？
   - 你为什么总是半夜跑酷？
   - 过来让我抱一下。
+  # held-out prompts (never in training data, show true generalization)
+  - 周末陪我玩逗猫棒好不好？
+  - 你最近好像瘦了。
+  - 我把你最喜欢的小毛球弄丢了。

@@ -3,54 +3,53 @@
 
 What this script does
 ---------------------
-1. Loads a tiny ShareGPT-format dataset (``cat-chat.json``) of cat-persona
-   dialogues.
-2. Builds a ``LoraModel`` on top of ``Qwen/Qwen2.5-0.5B-Instruct``.
-   On first run this downloads the base model weights (≈1 GB) into
-   ``~/.cache/huggingface/hub/`` (see ``cache_dir=`` to relocate).
-3. Asks a few test prompts BEFORE training to show the base model's
-   generic assistant answers.
-4. Fine-tunes with LoRA (default ``r=8, alpha=16``, 30 epochs, lr 3e-4).
-   Only ~0.1% of parameters are trained, so it finishes in minutes on MPS.
-5. Re-asks the same prompts AFTER training to show the cat persona.
+1. Loads ``cat-chat.json`` — ShareGPT-format dialogues of a sassy cat persona.
+2. Builds a ``LoraModel`` from ``model.yml`` (id/name/description/system_prompt)
+   on ``Qwen/Qwen2.5-0.5B-Instruct``.  First run downloads the base weights.
+3. Asks test prompts BEFORE training (generic assistant answers).
+4. LoRA fine-tunes on the persona data (epochs/max_length from the YAML).
+5. Re-asks the same prompts AFTER training to show the cat persona,
+   then saves the adapter to ``./cat-lora/``.
 
 Run
 ---
     cd demo
     python3 run.py
-
 """
 
 import json
 from pathlib import Path
 
+import yaml
+
 from lora_ez import LoraModel
+
+HERE = Path(__file__).parent
+CONFIG = HERE / "model.yml"
 
 # -- basic configuration --------------
 
-data_path = Path(__file__).parent / "cat-chat.json"  # ShareGPT-format training data
-id_ = "Qwen/Qwen2.5-0.5B-Instruct"                   # base model id
-name = "cat"                                         # display name / save-path prefix
-description = "你是一只傲娇的中华田园猫，自称本王/朕，说话带猫的习性。"  # immutable identity
+cfg = yaml.safe_load(CONFIG.read_text())
+id_ = cfg["id"]
+name = cfg["name"]
+description = cfg.get("description")
+system_prompt = cfg.get("system_prompt")
+data_path = HERE / cfg.get("data_path", "cat-chat.json")
+test_prompts = cfg.get("test_prompts", [])
+epochs = cfg.get("epochs", 10)
+max_length = cfg.get("max_length", 256)
+lr = cfg.get("lr", 3e-4)
 
-
-# -- data & test prompts --------------
+# -- data ------------------------------
 
 data = json.loads(data_path.read_text())
 
-test_prompts = [
-    "你觉得今天的晚饭吃什么好？",
-    "你为什么总是半夜跑酷？",
-    "过来让我抱一下。"
-]
+# -- run -------------------------------
 
-# -- train ----------------------------
-
-# create model
 print(f"[1/4] Loading base model {id_} ...")
-m = LoraModel(id_=id_, name=name, description=description)
+m = LoraModel(id_=id_, name=name, description=description,
+              system_prompt=system_prompt)
 print(f"      model ready: {m}")
-# m.load() # if (the adapter of) fine-tuning model exists
 
 print(f"[2/4] Testing {len(test_prompts)} prompts BEFORE fine-tuning ...\n")
 print("=== BEFORE fine-tuning ===")
@@ -58,8 +57,8 @@ for p in test_prompts:
     print(f"  User:  {p}")
     print(f"  {name}: {m.chat(p)}\n")
 
-print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, 30 epochs ...")
-m.train(data, epochs=30)
+print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, {epochs} epochs ...")
+m.train(data, epochs=epochs, lr=lr, max_length=max_length)
 print("      training done")
 
 print(f"[4/4] Testing the same prompts AFTER fine-tuning ...\n")
@@ -68,5 +67,6 @@ for p in test_prompts:
     print(f"  User:  {p}")
     print(f"  {name}: {m.chat(p)}\n")
 
-# uncomment ``m.save()`` to persist it to ``./cat-lora/``.
-# m.save()
+# save the trained adapter + persona description to ./cat-lora/
+m.save()
+print(f"adapter saved to {HERE / 'cat-lora'}")
