@@ -227,12 +227,9 @@ class LoraModel:
                     "epochs": 5, "learning_rate": 1e-5,
                     "per_device_train_batch_size": 4, "logging_steps": 5}
         kwargs = defaults | kwargs
-        # legacy alias: m.train(lr=...) still works
-        kwargs["learning_rate"] = kwargs.pop("lr", kwargs["learning_rate"])
         args = TrainingArguments(
-            num_train_epochs=kwargs.pop("epochs"),
-            learning_rate=kwargs.pop("learning_rate"),
-            **kwargs,
+            num_train_epochs=kwargs.pop("epochs"),  # friendly name -> official
+            **kwargs,  # learning_rate, output_dir, batch size, ... pass through
             save_strategy="no" if not save_checkpoints else "epoch",
             report_to="none",
         )
