@@ -58,7 +58,7 @@ for p in test_prompts:
     print(f"  {name}: {m.chat(p)}\n")
 
 print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, {cfg.get('epochs', 30)} epochs ...")
-m.train(data, epochs=cfg.get("epochs", 30), lr=cfg.get("lr", 3e-4),
+m.train(data, epochs=cfg.get("epochs", 30), learning_rate=cfg.get("learning_rate", 1e-4),
         max_length=cfg.get("max_length", 256))
 print("      training done")
 

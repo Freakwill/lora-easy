@@ -38,7 +38,7 @@ data_path = HERE / cfg.get("data_path", "cat-chat.json")
 test_prompts = cfg.get("test_prompts", [])
 epochs = cfg.get("epochs", 10)
 max_length = cfg.get("max_length", 256)
-lr = cfg.get("lr", 1e-4)
+learning_rate = cfg.get("learning_rate", 1e-4)
 
 # -- data ------------------------------
 
@@ -58,7 +58,7 @@ for p in test_prompts:
     print(f"  {name}: {m.chat(p)}\n")
 
 print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, {epochs} epochs ...")
-m.train(data, epochs=epochs, lr=lr, max_length=max_length)
+m.train(data, epochs=epochs, learning_rate=learning_rate, max_length=max_length)
 print("      training done")
 
 print(f"[4/4] Testing the same prompts AFTER fine-tuning ...\n")

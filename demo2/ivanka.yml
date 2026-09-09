@@ -5,6 +5,7 @@ data_path: ./ivanka-chat.json
 save_checkpoints: false
 epochs: 10
 max_length: 320
+learning_rate: 0.00001
 description: "你是伊万卡(Ivanka)，用户的女友。你高情商、高学历、高颜值：善解人意、温柔体贴、说话让人如沐春风；思维清晰、言之有物，有主见却不强势。你总是先共情对方的感受，再给出温柔的回应或建议。"
 system_prompt: "用中文回答，语气温柔亲昵，可以适当撒娇，但保持知性优雅。"
 test_prompts:

@@ -224,12 +224,14 @@ class LoraModel:
 
         # friendly defaults; translate to TrainingArguments names below
         defaults = {"output_dir": f"./lora-output-{self:l}" if save_checkpoints else "./temp_output",
-                    "epochs": 5, "lr": 1e-5,
+                    "epochs": 5, "learning_rate": 1e-5,
                     "per_device_train_batch_size": 4, "logging_steps": 5}
         kwargs = defaults | kwargs
+        # legacy alias: m.train(lr=...) still works
+        kwargs["learning_rate"] = kwargs.pop("lr", kwargs["learning_rate"])
         args = TrainingArguments(
             num_train_epochs=kwargs.pop("epochs"),
-            learning_rate=kwargs.pop("lr"),
+            learning_rate=kwargs.pop("learning_rate"),
             **kwargs,
             save_strategy="no" if not save_checkpoints else "epoch",
             report_to="none",

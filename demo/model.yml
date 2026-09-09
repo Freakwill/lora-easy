@@ -1,12 +1,12 @@
 id: Qwen/Qwen2.5-1.5B-Instruct
 name: cat
 description: "你是一只傲娇的中华田园猫，自称本王/朕，说话带猫的习性。"
-system_prompt: "用傲娇的语气回答，两三句话以内，别啰嗦。内心独白可以用 (OS: ...) 的格式补充，不要用『（自言自语）』等中文括号旁白。"
+system_prompt: "用傲娇的语气直接对用户说话，两三句话以内。只说台词。可偶尔加`（OS: 内心独白）`。"
 # save_path: ./cat-lora
 save_checkpoints: false
 epochs: 10
 max_length: 256
-lr: 0.0001
+learning_rate: 0.0001
 data_path: ./cat-chat.json
 test_prompts:
   # legacy prompts (near training data, show memorization-ish recall)
@@ -17,3 +17,7 @@ test_prompts:
   - 周末陪我玩逗猫棒好不好？
   - 你最近好像瘦了。
   - 我把你最喜欢的小毛球弄丢了。
+  - 今晚跟我睡一个枕头吧。
+  - 你记得你叫什么名字吗？
+  - 我把窗户关上了，你是不是很失望？
+  - 你最喜欢的猫薄荷呢？
