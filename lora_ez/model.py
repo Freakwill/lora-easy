@@ -121,6 +121,16 @@ class LoraModel:
         self.model = self.base
         self._lora_enabled = False
 
+    def fresh(self):
+        """Discard the current adapter and switch back to the clean base model.
+
+        Call this (or pass ``fresh=True`` to ``train()``) to stop hot-start /
+        continued learning and start a brand-new adapter from the base model.
+        """
+        self.peft_model = None
+        self.model = self.base
+        self._lora_enabled = False
+
     @property
     def lora_enabled(self):
         return self._lora_enabled
@@ -203,20 +213,26 @@ class LoraModel:
     # -- Training -----------------------------------------------------------
 
     def train(self, conversations: list[dict], save_checkpoints: bool = False,
-              max_length: int = 256, **kwargs):
+              max_length: int = 256, fresh: bool = False, **kwargs):
         """Fine-tune with LoRA on ShareGPT-format conversations.
 
         SFT pipeline: for each convo, everything up to the final assistant
         message is CONTEXT (labels masked to -100); the model learns to
         predict ONLY the last assistant reply.  Context is left-truncated
         when too long so the target is never clipped.
-        Auto-enables LoRA if not already active.
+
+        By default training continues from the current adapter (hot start /
+        continued learning).  Pass ``fresh=True`` (or call ``fresh()`` first)
+        to discard it and train a brand-new adapter from the base model.
 
         Args:
             save_checkpoints: if set, save a checkpoint per epoch to
                     ``./lora-output-{name}``.  False (default) produces no files.
             max_length: tokenizer truncation/padding length.  Default 256.
+            fresh: discard the existing adapter and start from the base model.
         """
+        if fresh:
+            self.fresh()
         if not self.lora_enabled:
             self.enable_lora()
         self.model.config.use_cache = False
