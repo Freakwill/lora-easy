@@ -57,6 +57,17 @@ for p in test_prompts:
     print(f"  User:  {p}")
     print(f"  {name}: {m.chat(p)}\n")
 
+# continued learning: optionally load the previous adapter first
+adapter_dir = HERE / "ivanka-lora"
+if adapter_dir.is_dir():
+    try:
+        ans = input(f"Load previous adapter ({adapter_dir}) and continue learning? [y/N] ").strip().lower()
+    except EOFError:  # non-interactive run -> default to a fresh start
+        ans = ""
+    if ans in ("y", "yes"):
+        m.load(str(adapter_dir))
+        print("      previous adapter loaded, continuing training")
+
 print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, {cfg.get('epochs', 30)} epochs ...")
 m.train(data, epochs=cfg.get("epochs", 30), learning_rate=cfg.get("learning_rate", 1e-4),
         max_length=cfg.get("max_length", 256))
