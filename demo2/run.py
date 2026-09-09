@@ -58,7 +58,7 @@ for p in test_prompts:
     print(f"  {name}: {m.chat(p)}\n")
 
 # continued learning: optionally load the previous adapter first
-adapter_dir = HERE / "ivanka-lora"
+adapter_dir = HERE / f"{name}-lora"
 if adapter_dir.is_dir():
     try:
         ans = input(f"Load previous adapter ({adapter_dir}) and continue learning? [y/N] ").strip().lower()
