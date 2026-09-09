@@ -56,11 +56,11 @@ def _help(session, *args):
 
 @register("/system-prompt")
 def _system_prompt(session, *args):
-    """View or change the system prompt.  ``/system_prompt`` alone shows current."""
+    """View or change the system prompt.  ``/system-prompt`` alone shows current."""
     if not args:
         current = session.system_prompt or "(default system prompt)"
         return f"Use current system prompt ---  {current}"
-    session.system_prompt = " ".join(args)
+    session.set_system_prompt(" ".join(args))
     return f"System prompt updated."
 
 
@@ -85,11 +85,9 @@ def _train(session, *args):
 
 @register("/summarize")
 def _summarize(session, *args):
-    """Manually summarise the conversation history."""
-    if len(session.history) < 2:
-        return "Not enough history to summarize."
-    session._force_summarize()
-    return "History summarized."
+    """Manually summarise the older turns (keeps persona and recent turns)."""
+    result = session._force_summarize()
+    return "History summarized." if result else "Not enough history to summarize."
 
 
 @register("/export")

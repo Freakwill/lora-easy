@@ -180,7 +180,7 @@ class LoraModel:
     # -- Chat session (context manager) ------------------------------------
 
     def chat_session(self, save_path: str | None = None, auto_save: bool = False,
-                     max_tokens: int = 2000, system_prompt: str | None = None):
+                     max_tokens: int = 4096, system_prompt: str | None = None):
         """Return a ``ChatSession`` context manager for multi-turn conversations.
 
         Usage::
@@ -190,8 +190,10 @@ class LoraModel:
                 s> "What do you think?"
                 s.history   # all turns so far
 
-        When the history grows beyond ``max_tokens`` tokens it is automatically
-        summarised by the model and replaced with a compact system message.
+        When the history grows beyond ``max_tokens`` tokens the OLD turns are
+        automatically summarised into a ``[Memory]`` system message; the
+        persona anchors and recent turns stay verbatim.
+        ``system_prompt`` overrides ``self.system_prompt`` for the session.
         """
         from .session import _ChatSession
         return _ChatSession(self, save_path, auto_save, max_tokens,

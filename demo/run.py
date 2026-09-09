@@ -38,7 +38,7 @@ data_path = HERE / cfg.get("data_path", "cat-chat.json")
 test_prompts = cfg.get("test_prompts", [])
 epochs = cfg.get("epochs", 10)
 max_length = cfg.get("max_length", 256)
-lr = cfg.get("lr", 3e-4)
+lr = cfg.get("lr", 1e-4)
 
 # -- data ------------------------------
 
