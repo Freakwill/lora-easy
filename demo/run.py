@@ -4,8 +4,8 @@
 What this script does
 ---------------------
 1. Loads ``cat-chat.json`` — ShareGPT-format dialogues of a sassy cat persona.
-2. Builds a ``LoraModel`` from ``model.yml`` (id/name/description/system_prompt)
-   on ``Qwen/Qwen2.5-0.5B-Instruct``.  First run downloads the base weights.
+2. Builds a ``LoraModel`` from ``model.yml`` (id/name/description/system_prompt).
+   First run downloads the base weights named by ``id``.
 3. Asks test prompts BEFORE training (generic assistant answers).
 4. LoRA fine-tunes on the persona data (epochs/max_length from the YAML).
 5. Re-asks the same prompts AFTER training to show the cat persona,
@@ -72,7 +72,8 @@ if adapter_dir.is_dir():
 
 print(f"[3/4] Fine-tuning with LoRA on {len(data)} conversations, {epochs} epochs ...")
 
-m.train(data, epochs=epochs, learning_rate=learning_rate, max_length=max_length)
+m.train(data, epochs=epochs, learning_rate=learning_rate, max_length=max_length,
+        per_device_train_batch_size=cfg.get("batch_size", 4))
 print("      training done")
 
 print(f"[4/4] Testing the same prompts AFTER fine-tuning ...\n")
