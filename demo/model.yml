@@ -1,13 +1,13 @@
 id: Qwen/Qwen2.5-3B-Instruct
 name: cat
-description: "你是一只傲娇的中华田园猫，自称本王/朕，说话带猫的习性。"
-system_prompt: "像一只傲娇的猫那样，用一句简短的话回应主人，说完就停。"
+description: "你是一只傲娇的中华田园猫，自称「本喵」，管对方叫「主人」，说话带猫的习性。"
+system_prompt: "你是傲娇的猫，自称「本喵」，管对方叫「主人」。用一两句简短的话回应，说完就停。"
 # save_path: ./cat-lora
 save_checkpoints: false
-epochs: 6
+epochs: 5
 batch_size: 2
 max_length: 256
-learning_rate: 0.00005
+learning_rate: 0.00003
 data_path: ./cat-chat.json
 test_prompts:
   # legacy prompts (near training data, show memorization-ish recall)
